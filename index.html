@@ -150,6 +150,7 @@ button.row::after{content:"›";flex:none;color:var(--muted);font-size:1.5rem;li
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;max-width:min(92vw,520px);padding:12px 16px;border-radius:10px;background:var(--ink);color:var(--bg);font-weight:700;text-align:center}
 #app:empty::after{content:"Page vide ? Ce lecteur ne sait pas afficher l'appli. Ouvre le fichier avec Chrome : appui long sur le fichier, puis « Ouvrir avec », puis Chrome.";display:block;padding:14px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-weight:600;opacity:0;animation:late 0s 3s forwards}
 @keyframes late{to{opacity:1}}
+#inst:empty{display:none}
 @media (max-width:330px){.opts,.btnrow,.stats{grid-template-columns:minmax(0,1fr)}}
 @media (prefers-reduced-motion:no-preference){.opt,.btn{transition:background-color .12s,border-color .12s}}
 </style>
@@ -392,6 +393,7 @@ const VIEWS={
   if(window.claude)h+=`<p class="note">Aperçu dans Claude : le GPS et le mode sans réseau ne marchent pas ici. Ils marchent dans la version installée sur le téléphone.</p>`;
   else if(window.DIAG_DEMO)h+=`<p class="note">Version d'essai pour relire les fiches. Dans ce fichier, le GPS peut ne pas marcher et les saisies peuvent ne pas être gardées.</p>`;
   if(memOnly&&!window.DIAG_DEMO)h+=`<p class="miss">Stockage indisponible sur cet écran : les données ne seront pas gardées après fermeture.</p>`;
+  h+=`<div class="sec" id="inst">${installHtml()}</div>`;
   h+=`<section class="sec"><h2>Marché</h2>
    <div class="fld"><label for="f-projet">Nom du marché ou du projet</label><input id="f-projet" type="text" autocomplete="off" data-o="cur" data-k="projet" value="${esc(data.projet)}"></div>
    <div class="fld"><label for="f-technicien">Responsable du relevé</label><input id="f-technicien" type="text" autocomplete="off" data-o="cur" data-k="technicien" value="${esc(data.technicien)}"></div></section>`;
@@ -540,6 +542,7 @@ const ACT={
  addPt(b){const g=takeFix();if(!g)return;const t=cur();t.pts.push({lat:g.lat,lon:g.lon,acc:g.acc,t:g.t,kind:b.dataset.kind,note:''});save();render();toast('Point ajouté : '+b.dataset.kind)},
  delPt(b){cur().pts.splice(+b.dataset.i,1);save();render()},
  example(){data.communes.push(exampleCommune());save();render();toast('Exemple chargé')},
+ async install(){const e=installEvt;if(!e)return;installEvt=null;try{e.prompt();await e.userChoice}catch(_){}drawInstall()},
  async prep(b){const scope=b.dataset.scope,cs=scope==='all'?data.communes:[ctx().c];exp={scope,busy:true};render();
   try{const r=await buildExport(cs);const name=`AEP_${scope==='all'?'Toutes_communes':(san(cs[0].nom)||'Commune')}_${isoDay(Date.now())}.zip`;
    let canShare=false;try{canShare=!dlCap&&!!navigator.canShare&&navigator.canShare({files:[new File([r.blob],name,{type:'application/zip'})]})}catch(e){}
@@ -644,6 +647,15 @@ async function buildExport(communes){
   let np=0;for(const [id,f] of files){const b=await getPhoto(id);if(!b)continue;z.add(f,new Uint8Array(await b.arrayBuffer()),b);np++}
   return {blob:z.end('application/zip'),nd,np}}
 
+/* ---------- installation sur le téléphone ---------- */
+let installEvt=null;
+function standalone(){try{return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}}
+function installHtml(){if(window.claude||window.DIAG_DEMO||standalone())return '';
+  return installEvt?`<button type="button" class="btn primary" data-act="install">Installer l'application sur ce téléphone</button><p class="hint">Elle aura son icône sur l'écran d'accueil et s'ouvrira sans réseau.</p>`
+   :`<p class="note">Pour installer l'appli : ouvre ce lien dans Chrome, touche les 3 points en haut à droite, puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».</p>`}
+function drawInstall(){const el=$('#inst');if(el)el.innerHTML=installHtml()}
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;drawInstall()});
+window.addEventListener('appinstalled',()=>{installEvt=null;drawInstall();toast("Appli installée. Ouvre-la depuis l'écran d'accueil.")});
 /* ---------- démarrage ---------- */
 let dlCap=null;
 (async()=>{try{dlCap=(window.claude&&window.claude.use&&await window.claude.use('downloads'))||null}catch(e){dlCap=null}})();
