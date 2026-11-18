@@ -1,0 +1,665 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Diagnostic AEP</title><meta name="theme-color" content="#0a5a73"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<style>
+/* Layout : une seule colonne de grandes touches, barre haute fixe (retour + état GPS),
+   pensée pour une main, en plein soleil. Polices du téléphone uniquement : l'appli doit
+   tourner sans aucun réseau, donc aucun fichier externe. */
+:root{
+  --bg:#edf2f3; --surface:#ffffff; --ink:#0d2a33; --muted:#51656c; --line:#c5d3d8;
+  --bar:#0a5a73; --bar-ink:#ffffff;
+  --accent:#0a6a86; --accent-ink:#ffffff; --accent-soft:#d8ebf1;
+  --ok:#1b7440; --ok-soft:#dbf0e2; --warn:#8f5a00; --warn-soft:#fbecc6;
+  --bad:#b3261e; --bad-soft:#f9dcd9; --flow:#673d9c; --flow-soft:#e9def6;
+  --on-tone:#ffffff;
+  --font:system-ui,"Roboto","Segoe UI","Helvetica Neue",Arial,sans-serif;
+  --num:ui-monospace,"Roboto Mono","DejaVu Sans Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b171b; --surface:#13252b; --ink:#e7f0f2; --muted:#9fb3b9; --line:#2c444c;
+    --bar:#10323c; --bar-ink:#e7f0f2;
+    --accent:#4fb6d3; --accent-ink:#05222b; --accent-soft:#153843;
+    --ok:#63c98a; --ok-soft:#173524; --warn:#e8b54a; --warn-soft:#3b2f10;
+    --bad:#f08a82; --bad-soft:#43201d; --flow:#b99be6; --flow-soft:#2e2244;
+    --on-tone:#0b171b; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b171b; --surface:#13252b; --ink:#e7f0f2; --muted:#9fb3b9; --line:#2c444c;
+  --bar:#10323c; --bar-ink:#e7f0f2;
+  --accent:#4fb6d3; --accent-ink:#05222b; --accent-soft:#153843;
+  --ok:#63c98a; --ok-soft:#173524; --warn:#e8b54a; --warn-soft:#3b2f10;
+  --bad:#f08a82; --bad-soft:#43201d; --flow:#b99be6; --flow-soft:#2e2244;
+  --on-tone:#0b171b; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:17px/1.4 var(--font);-webkit-text-size-adjust:100%;overflow-wrap:anywhere}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bar)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--bar);color:var(--bar-ink)}
+.top-in{display:flex;align-items:center;gap:10px;min-height:58px;max-width:720px;margin:0 auto;padding-block:6px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.back{flex:none;width:46px;height:46px;border-radius:10px;border:1.5px solid color-mix(in srgb,var(--bar-ink) 45%,transparent);background:none;color:var(--bar-ink);font-size:1.5rem;line-height:1}
+.title{flex:1;min-width:0;margin:0;font-size:1.08rem;font-weight:700;line-height:1.2;text-wrap:balance}
+.chip{flex:none;padding:6px 10px;border-radius:99px;font:700 .78rem var(--num);white-space:nowrap;background:color-mix(in srgb,var(--bar-ink) 16%,transparent);color:var(--bar-ink)}
+.chip[data-s="ok"]{background:var(--ok-soft);color:var(--ok)}
+.chip[data-s="low"]{background:var(--warn-soft);color:var(--warn)}
+.chip[data-s="off"]{background:var(--bad-soft);color:var(--bad)}
+.recband{background:var(--bad);color:var(--on-tone)}
+.recband-in{display:flex;align-items:center;gap:10px;max-width:720px;margin:0 auto;padding-block:8px;font-weight:700;font-size:.92rem;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.recband-in span{flex:1;min-width:0}
+.recband button{flex:none;min-height:40px;padding:6px 14px;border-radius:8px;border:1.5px solid var(--on-tone);background:none;color:var(--on-tone);font-weight:700}
+
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:26px;padding-block:18px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.sec{display:flex;flex-direction:column;gap:12px;min-width:0}
+.sec>h2{margin:0;font-size:.78rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.fld{display:flex;flex-direction:column;gap:6px;min-width:0}
+fieldset{border:0;padding:0;margin:0;min-width:0}
+legend,.fld>label:not(.filebtn),.lbl{display:block;padding:0;font-weight:700;font-size:.95rem}
+legend{margin-bottom:6px}
+.count{font:700 .8rem var(--num);color:var(--muted);margin-left:6px}
+input[type=text],input[type=number],input[type=tel],input[type=date],select,textarea{
+  width:100%;min-height:52px;padding:12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
+textarea{min-height:76px;resize:vertical}
+.numrow{display:flex;align-items:center;gap:10px}
+.numrow input{flex:1;min-width:0;font-family:var(--num)}
+.unit{flex:none;min-width:3.2em;color:var(--muted);font-weight:600}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.opts.one{grid-template-columns:minmax(0,1fr)}
+.opt{min-height:54px;padding:10px 8px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font-weight:600;font-size:.95rem;line-height:1.25;text-align:center}
+.opt[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.opt[data-tone="ok"][aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:var(--on-tone)}
+.opt[data-tone="warn"][aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:var(--on-tone)}
+.opt[data-tone="bad"][aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:var(--on-tone)}
+.opt[data-tone="flow"][aria-pressed="true"]{background:var(--flow);border-color:var(--flow);color:var(--on-tone)}
+
+.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:54px;padding:12px 16px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;text-align:center}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn.danger.sure{background:var(--bad);color:var(--on-tone)}
+.btn.rec{background:var(--bad);border-color:var(--bad);color:var(--on-tone)}
+.btn:disabled{opacity:.55}
+.btnrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.filebtn{position:relative;cursor:pointer}
+.filebtn:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+.link{display:block;padding:10px 4px;border:0;background:none;color:var(--accent);font-weight:700;text-align:center;text-decoration:underline}
+
+.list{background:var(--surface);border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:flex;align-items:center;gap:10px;width:100%;min-height:62px;padding:12px 14px;border:0;border-top:1px solid var(--line);background:none;color:inherit;text-align:left}
+.row:first-child{border-top:0}
+.row .main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.row .t{font-weight:700}
+.row .s{color:var(--muted);font-size:.86rem}
+.row .side{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+button.row::after{content:"›";flex:none;color:var(--muted);font-size:1.5rem;line-height:1}
+.pill{display:inline-block;padding:3px 9px;border-radius:99px;font-size:.76rem;font-weight:700;white-space:nowrap;background:var(--accent-soft);color:var(--accent)}
+.pill[data-tone="ok"]{background:var(--ok-soft);color:var(--ok)}
+.pill[data-tone="warn"]{background:var(--warn-soft);color:var(--warn)}
+.pill[data-tone="bad"]{background:var(--bad-soft);color:var(--bad)}
+.pill[data-tone="flow"]{background:var(--flow-soft);color:var(--flow)}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.empty{margin:0;color:var(--muted)}
+.hint{margin:0;color:var(--muted);font-size:.88rem}
+.miss{margin:0;padding:12px 14px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-weight:600}
+.miss ul{margin:6px 0 0;padding-left:1.2em;font-weight:500}
+.done{margin:0;padding:12px 14px;border-radius:10px;background:var(--ok-soft);color:var(--ok);font-weight:700}
+.note{margin:0;padding:12px 14px;border-radius:10px;background:var(--accent-soft);color:var(--ink);font-size:.92rem}
+.gpsbox{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;padding:12px;border:1.5px dashed var(--line);border-radius:10px;font-family:var(--num);font-size:.95rem;font-variant-numeric:tabular-nums}
+.gpsbox .none{font-family:var(--font);color:var(--muted)}
+.acc{font-weight:700;color:var(--ok)}
+.acc.low{color:var(--warn)}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.thumbs:empty{display:none}
+.thumb{aspect-ratio:1;max-width:100%;padding:0;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.stat{padding:12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface)}
+.stat b{display:block;font:700 1.4rem var(--num);font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:.86rem}
+.ptrow{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
+.ptrow:first-child{border-top:0}
+.pthead{display:flex;align-items:center;gap:10px}
+.pthead .main{flex:1;min-width:0}
+.pthead .s{display:block;color:var(--muted);font:.8rem var(--num)}
+.mini{flex:none;min-height:40px;padding:6px 12px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--bad);font-weight:700;font-size:.86rem}
+.iv{display:flex;flex-direction:column;gap:8px;padding:12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface)}
+
+.viewer{position:fixed;inset:0;z-index:20;overflow:auto;background:var(--bg);
+  padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.viewer-in{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.viewer img{display:block;width:100%;border-radius:8px;background:var(--surface)}
+.meta{margin:0;color:var(--muted);font:.86rem var(--num)}
+.strip{position:relative;display:flex;gap:8px;max-width:720px;margin:0 auto;overflow-x:auto;scrollbar-width:none;padding-block:4px 10px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.strip::-webkit-scrollbar{display:none}
+.sc{flex:none;max-width:70vw;min-height:42px;padding:6px 14px;border-radius:99px;border:1.5px solid color-mix(in srgb,var(--bar-ink) 45%,transparent);background:none;color:var(--bar-ink);font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc[aria-current="true"]{background:var(--bar-ink);border-color:var(--bar-ink);color:var(--bar)}
+.sc.side{border-style:dashed}
+.top :focus-visible{outline-color:var(--bar-ink)}
+.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1.5px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.tab{min-height:54px;padding:8px 4px;border:0;border-left:1.5px solid var(--line);background:none;color:var(--ink);font-weight:700;font-size:.95rem;line-height:1.2}
+.tab:first-child{border-left:0}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.tab[aria-selected="true"] .count{color:inherit}
+.tab:focus-visible{outline-offset:-4px;outline-color:currentColor}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;max-width:min(92vw,520px);padding:12px 16px;border-radius:10px;background:var(--ink);color:var(--bg);font-weight:700;text-align:center}
+#app:empty::after{content:"Page vide ? Ce lecteur ne sait pas afficher l'appli. Ouvre le fichier avec Chrome : appui long sur le fichier, puis « Ouvrir avec », puis Chrome.";display:block;padding:14px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-weight:600;opacity:0;animation:late 0s 3s forwards}
+@keyframes late{to{opacity:1}}
+@media (max-width:330px){.opts,.btnrow,.stats{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:no-preference){.opt,.btn{transition:background-color .12s,border-color .12s}}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <button class="back" id="back" type="button" data-act="back" aria-label="Retour" hidden>‹</button>
+    <h1 class="title" id="title">Diagnostic AEP</h1>
+    <span class="chip" id="gps" data-s="wait">GPS…</span>
+  </div>
+  <nav class="strip" id="strip" aria-label="Fiches voisines" hidden></nav>
+  <div class="recband" id="recband" hidden><div class="recband-in"><span id="rectxt"></span><button type="button" data-act="rec">Arrêter</button></div></div>
+</header>
+<main class="wrap" id="app"></main>
+<div class="viewer" id="viewer" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function(){
+'use strict';
+/* ---------- petits outils ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const p2=n=>String(n).padStart(2,'0');
+const fmtDate=t=>{const d=new Date(t);return `${p2(d.getDate())}/${p2(d.getMonth()+1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`};
+const isoDay=t=>{const d=new Date(t);return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`};
+const frDay=s=>{const m=/^(\d{4})-(\d\d)-(\d\d)$/.exec(s||'');return m?`${m[3]}/${m[2]}/${m[1]}`:(s||'')};
+const san=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40);
+const plur=(n,w)=>`${n} ${w}${n>1?'s':''}`;
+const r6=x=>Math.round(x*1e6)/1e6;
+function dist(a,b){const R=6371000,q=Math.PI/180,dl=(b.lat-a.lat)*q,dn=(b.lon-a.lon)*q,
+  h=Math.sin(dl/2)**2+Math.cos(a.lat*q)*Math.cos(b.lat*q)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+const traceLen=t=>{let s=0;for(let i=1;i<t.pts.length;i++)s+=dist(t.pts[i-1],t.pts[i]);return s};
+let toastT;function toast(m){const el=$('#toast');el.textContent=m;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{el.hidden=true},3200)}
+
+/* ---------- définition des fiches ---------- */
+const SIT={raccorde:['Raccordé','ok'],partiel:['Partiellement raccordé','warn'],non:['Non raccordé','bad'],debit:['Raccordé, problème de débit','flow']};
+const OUV={puits:'Puits',forage:'Forage',source:'Source',reservoir:'Réservoir',pompage:'Station de pompage',borne:'Borne-fontaine',conduite:'Conduite',regard:'Regard / vanne',autre:'Autre ouvrage'};
+const ETAT={bon:['Bon','ok'],moyen:['Moyen','warn'],degrade:['Dégradé','bad'],hs:['Hors service','bad']};
+const TRACE={existante:'Conduite existante',projetee:'Conduite projetée',piste:"Piste d'accès"};
+const SING=['Traversée de chaâba / oued','Traversée de route / piste','Terrain rocheux',"Opposition d'un riverain",'Changement de direction'];
+const QUAL=['Président de la commune','Élu','Autorité locale','Association','Technicien de la commune','ONEE',"Maître d'ouvrage",'Habitant',"Bureau d'études",'Autre'];
+const tones=o=>Object.entries(o).map(([v,[l,t]])=>[v,l,t]);
+const F={
+ douar:[
+  {k:'situation',t:'choice',one:true,label:'Situation du douar',opts:tones(SIT)},
+  {k:'menages',t:'num',label:'Nombre de ménages',unit:'ménages'},
+  {k:'menages_nd',t:'num',label:'Ménages non desservis',unit:'ménages',if:f=>f.situation==='partiel'},
+  {k:'quartiers_nd',t:'text',label:'Quartiers non desservis',if:f=>f.situation==='partiel'},
+  {k:'problemes',t:'multi',label:'Problèmes sur le réseau',if:f=>f.situation&&f.situation!=='non',
+   opts:['Pression faible','Coupures fréquentes','Eau quelques heures par jour',"Manque d'eau en été",'Fuites sur le réseau','Eau de mauvaise qualité','Compteurs absents ou en panne']},
+  {k:'desserte',t:'multi',label:'Mode de desserte',if:f=>f.situation&&f.situation!=='non',opts:['Branchements individuels','Bornes-fontaines']},
+  {k:'ressource',t:'multi',label:"D'où vient l'eau aujourd'hui",
+   opts:['Réseau ONEE',"Réseau d'une association",'Puits','Forage','Source','Camion-citerne','Matfia (citerne enterrée)','Oued / séguia','Autre']},
+  {k:'gestion',t:'choice',label:"Qui gère l'eau",opts:['Association','Commune','ONEE','Personne']},
+  {k:'distance',t:'num',label:"Distance jusqu'au point d'eau",unit:'m',if:f=>f.situation==='non'||f.situation==='partiel'},
+  {k:'electricite',t:'yn',label:'Électricité dans le douar'},
+  {k:'equipements',t:'multi',label:'Équipements du douar',opts:['École','Mosquée','Dispensaire','Dar Taliba / internat','Souk','Autre']},
+  {k:'demande',t:'text',label:'Demande des habitants'},
+  {k:'note',t:'text',label:'Remarque'}
+ ],
+ ouvrage:[
+  {k:'nom',t:'line',label:'Nom ou repère'},
+  {k:'etat',t:'choice',label:'État',opts:tones(ETAT)},
+  {k:'service',t:'yn',label:'En service'},
+  {k:'profondeur',t:'num',label:'Profondeur',unit:'m',types:['puits','forage']},
+  {k:'niveau',t:'num',label:"Niveau de l'eau sous le sol",unit:'m',types:['puits','forage']},
+  {k:'diam_m',t:'num',label:'Diamètre du puits',unit:'m',types:['puits']},
+  {k:'diam_mm',t:'num',label:'Diamètre',unit:'mm',types:['forage','conduite']},
+  {k:'debit',t:'num',label:'Débit, si connu',unit:'l/s',types:['puits','forage','source','pompage']},
+  {k:'pompe',t:'yn',label:"Équipé d'une pompe",types:['puits','forage']},
+  {k:'energie',t:'choice',label:'Énergie',opts:['Électricité','Solaire','Gasoil','Aucune'],types:['puits','forage','pompage']},
+  {k:'puissance',t:'num',label:'Puissance de la pompe, si connue',unit:'kW',types:['pompage']},
+  {k:'captage',t:'yn',label:'Captage aménagé',types:['source']},
+  {k:'capacite',t:'num',label:'Capacité',unit:'m³',types:['reservoir']},
+  {k:'res_type',t:'choice',label:'Type de réservoir',opts:['Au sol','Semi-enterré','Surélevé'],types:['reservoir']},
+  {k:'res_mat',t:'choice',label:'Matériau du réservoir',opts:['Béton','Maçonnerie','Plastique','Métal'],types:['reservoir']},
+  {k:'robinets',t:'num',label:'Nombre de robinets',unit:'robinets',types:['borne']},
+  {k:'compteur',t:'yn',label:'Compteur',types:['borne']},
+  {k:'materiau',t:'choice',label:'Matériau de la conduite',opts:['PVC','PEHD','Acier galvanisé','Fonte','Amiante-ciment','Inconnu'],types:['conduite']},
+  {k:'longueur',t:'num',label:'Longueur estimée',unit:'m',types:['conduite']},
+  {k:'pose',t:'choice',label:'Pose',opts:['Enterrée','Apparente'],types:['conduite']},
+  {k:'problemes',t:'multi',label:'Problèmes constatés',opts:['Fuite','Fissures','Pompe en panne','Tarissement','Ensablement','Pas de clôture ou de couvercle','Eau de mauvaise qualité','Vandalisme','Autre']},
+  {k:'note',t:'text',label:'Remarque'}
+ ]
+};
+const optsOf=d=>d.t==='yn'?[['oui','Oui'],['non','Non']]:d.opts.map(x=>Array.isArray(x)?x:[x,x]);
+const shown=(d,f,type)=>(!d.if||d.if(f))&&(!d.types||d.types.includes(type));
+function valText(d,v){
+  if(v==null||v===''||(Array.isArray(v)&&!v.length))return '';
+  if(d.t==='num')return typeof v==='number'?v:String(v);
+  if(d.t==='multi')return v.join(' ; ');
+  if(d.t==='choice'||d.t==='yn'){const o=optsOf(d).find(x=>x[0]===v);return o?o[1]:String(v)}
+  return String(v);
+}
+function fieldHtml(d,f){
+  const v=f[d.k],id='f-'+d.k;
+  if(d.t==='choice'||d.t==='yn'||d.t==='multi'){
+    return `<fieldset class="fld"><legend>${esc(d.label)}</legend><div class="opts${d.one?' one':''}">`+
+      optsOf(d).map(([val,lab,tone])=>{const on=d.t==='multi'?(v||[]).includes(val):v===val;
+        return `<button type="button" class="opt" data-act="${d.t==='multi'?'tog':'set'}" data-k="${d.k}" data-v="${esc(val)}"${tone?` data-tone="${tone}"`:''} aria-pressed="${on}">${esc(lab)}</button>`}).join('')+
+      `</div></fieldset>`;
+  }
+  if(d.t==='num')return `<div class="fld"><label for="${id}">${esc(d.label)}</label><div class="numrow"><input id="${id}" type="number" inputmode="decimal" step="any" min="0" data-o="f" data-k="${d.k}" value="${esc(v??'')}"><span class="unit">${esc(d.unit||'')}</span></div></div>`;
+  if(d.t==='line')return `<div class="fld"><label for="${id}">${esc(d.label)}</label><input id="${id}" type="text" autocomplete="off" data-o="f" data-k="${d.k}" value="${esc(v??'')}"></div>`;
+  return `<div class="fld"><label for="${id}">${esc(d.label)}</label><textarea id="${id}" rows="2" data-o="f" data-k="${d.k}">${esc(v??'')}</textarea></div>`;
+}
+
+/* ---------- stockage dans le téléphone ---------- */
+let data={projet:'',technicien:'',communes:[]};
+let memOnly=false;const memPhotos=new Map();
+let dbp=null;
+function idb(){return dbp||(dbp=new Promise((res,rej)=>{let r;try{r=indexedDB.open('diag-aep',1)}catch(e){return rej(e)}
+  r.onupgradeneeded=()=>{r.result.createObjectStore('kv');r.result.createObjectStore('photos')};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);r.onblocked=()=>rej(new Error('blocked'))}))}
+async function idbOp(store,mode,fn){const db=await idb();return new Promise((res,rej)=>{const tx=db.transaction(store,mode);const rq=fn(tx.objectStore(store));
+  tx.oncomplete=()=>res(rq&&rq.result);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error)})}
+async function putPhoto(id,blob){if(memOnly){memPhotos.set(id,blob);return}await idbOp('photos','readwrite',s=>s.put(blob,id))}
+async function getPhoto(id){if(memOnly)return memPhotos.get(id)||null;try{return await idbOp('photos','readonly',s=>s.get(id))}catch(e){return null}}
+async function delPhotos(ids){ids.forEach(id=>{const u=urls.get(id);if(u){URL.revokeObjectURL(u);urls.delete(id)}});
+  if(memOnly){ids.forEach(id=>memPhotos.delete(id));return}
+  try{await idbOp('photos','readwrite',s=>{ids.forEach(id=>s.delete(id))})}catch(e){}}
+let saveT=null,askedPersist=false;
+function save(){clearTimeout(saveT);saveT=setTimeout(flush,250)}
+async function flush(){clearTimeout(saveT);saveT=null;if(memOnly)return;
+  try{await idbOp('kv','readwrite',s=>s.put(JSON.parse(JSON.stringify(data)),'data'))}catch(e){toast("Attention : l'enregistrement a échoué")}
+  if(!askedPersist){askedPersist=true;try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}}}
+function normalize(d){d=d&&typeof d==='object'?d:{};d.projet=d.projet||'';d.technicien=d.technicien||'';d.communes=Array.isArray(d.communes)?d.communes:[];
+  d.communes.forEach(c=>{c.douars=c.douars||[];c.visites=c.visites||[];c.visites.forEach(v=>{v.intervenants=v.intervenants||[]});
+    c.douars.forEach(x=>{x.f=x.f||{};x.photos=x.photos||[];x.ouvrages=x.ouvrages||[];x.traces=x.traces||[];
+      x.ouvrages.forEach(o=>{o.f=o.f||{};o.photos=o.photos||[]});x.traces.forEach(t=>{t.pts=t.pts||[];t.photos=t.photos||[]})})});return d}
+
+/* ---------- navigation ---------- */
+let nav=[{v:'home'}],hist=0,sure=null,picker=false,exp=null,afterPop=null;
+function keepNav(){data.nav=nav;save()}
+const top=()=>nav[nav.length-1];
+function ctx(){const n=top(),c=data.communes.find(x=>x.id===n.c),d=c&&c.douars.find(x=>x.id===n.d);
+  return {n,c,d,o:d&&d.ouvrages.find(x=>x.id===n.o),t:d&&d.traces.find(x=>x.id===n.t),vi:c&&c.visites.find(x=>x.id===n.vi)}}
+function cur(){const x=ctx();return {home:data,commune:x.c,douar:x.d,ouvrage:x.o,trace:x.t,visite:x.vi}[x.n.v]}
+function go(n){nav.push(n);sure=null;picker=false;exp=null;try{history.pushState({i:nav.length},'');hist++}catch(e){}keepNav();render();window.scrollTo(0,0)}
+function swap(n){nav[nav.length-1]=n;sure=null;picker=false;exp=null;keepNav();render();window.scrollTo(0,0)}
+function popNav(){if(nav.length>1){nav.pop();sure=null;picker=false;exp=null;if(afterPop){afterPop();afterPop=null}keepNav();render();window.scrollTo(0,0)}}
+function back(){if(nav.length<2)return;if(hist>0){try{history.back();return}catch(e){}}popNav()}
+window.addEventListener('popstate',()=>{if(!$('#viewer').hidden){closeViewer();try{history.pushState({i:nav.length},'')}catch(e){}return}if(hist>0)hist--;popNav()});
+
+/* ---------- GPS ---------- */
+let fix=null,gpsErr='';
+const fresh=()=>fix&&Date.now()-fix.t<20000;
+function startGps(){
+  if(!('geolocation' in navigator)){gpsErr='none';chip();return}
+  try{navigator.geolocation.watchPosition(p=>{gpsErr='';fix={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy||0,t:Date.now()};onFix()},
+    e=>{gpsErr=e&&e.code===1?'denied':'wait';chip()},{enableHighAccuracy:true,maximumAge:0,timeout:30000})}catch(e){gpsErr='none';chip()}
+}
+function chip(){const el=$('#gps');
+  if(gpsErr==='denied'||gpsErr==='none'){el.dataset.s='off';el.textContent='GPS indisponible';return}
+  if(!fresh()){el.dataset.s='wait';el.textContent='GPS : recherche';return}
+  el.dataset.s=fix.acc>15?'low':'ok';el.textContent='GPS ± '+Math.round(fix.acc)+' m'}
+setInterval(chip,5000);
+function takeFix(){if(!fresh()){toast(gpsErr==='denied'||gpsErr==='none'?'GPS indisponible sur cet écran':'Pas de GPS. Reste à découvert quelques secondes.');return null}
+  return {lat:r6(fix.lat),lon:r6(fix.lon),acc:Math.round(fix.acc),t:Date.now()}}
+function gpsHtml(obj,label){const g=obj.gps;
+  return `<div class="fld"><div class="lbl">${label}</div><div class="gpsbox">${g?`<span>${g.lat.toFixed(6)}, ${g.lon.toFixed(6)}</span><span class="acc${g.acc>15?' low':''}">± ${g.acc} m${g.acc>15?' · peu précis':''}</span>`:'<span class="none">Pas encore prise</span>'}</div>
+  <button type="button" class="btn${g?'':' primary'}" data-act="gps">${g?'Reprendre la position ici':'Prendre la position ici'}</button></div>`}
+
+/* ---------- tracé GPS ---------- */
+let rec=null,wake=null;
+function recTrace(){if(!rec)return null;const c=data.communes.find(x=>x.id===rec.c),d=c&&c.douars.find(x=>x.id===rec.d);return (d&&d.traces.find(x=>x.id===rec.t))||null}
+async function wakeOn(){try{if(navigator.wakeLock)wake=await navigator.wakeLock.request('screen')}catch(e){}}
+function stopRec(){rec=null;try{wake&&wake.release()}catch(e){}wake=null;renderRec()}
+function onFix(){chip();const t=recTrace();if(rec&&!t){stopRec();return}
+  if(t&&fix.acc<=25){const last=t.pts[t.pts.length-1];
+    if(!last||dist(last,fix)>=8){t.pts.push({lat:r6(fix.lat),lon:r6(fix.lon),acc:Math.round(fix.acc),t:fix.t,kind:''});save();renderRec();liveTrace(t)}}}
+function renderRec(){const t=recTrace(),b=$('#recband');b.hidden=!t;if(t)$('#rectxt').textContent=`Tracé en cours · ${Math.round(traceLen(t))} m · ${t.nom||'sans nom'}`}
+function liveTrace(t){if(top().v!=='trace'||top().t!==t.id)return;const s=$('#tr-stats');if(s)s.innerHTML=traceStats(t)}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){if(saveT)flush()}else if(rec)wakeOn()});
+window.addEventListener('pagehide',()=>{if(saveT)flush()});
+
+/* ---------- photos ---------- */
+const urls=new Map();
+async function photoUrl(id){if(urls.has(id))return urls.get(id);const b=await getPhoto(id);if(!b)return '';const u=URL.createObjectURL(b);urls.set(id,u);return u}
+function hydrate(root){(root||document).querySelectorAll('img[data-ph]').forEach(async im=>{const u=await photoUrl(im.dataset.ph);if(u)im.src=u})}
+function photosHtml(h,required){
+  return `<div class="fld"><div class="lbl">Photos<span class="count">${h.photos.length}</span></div>
+  <div class="thumbs">${h.photos.map(p=>`<button type="button" class="thumb" data-act="photo" data-id="${p.id}"><img data-ph="${p.id}" alt="Photo du ${fmtDate(p.t)}"></button>`).join('')}</div>
+  <label class="btn${required&&!h.photos.length?' primary':''} filebtn">Prendre une photo<input class="vh" id="cam" type="file" accept="image/*" capture="environment"></label>
+  <label class="link filebtn">Choisir dans la galerie<input class="vh" id="gal" type="file" accept="image/*" multiple></label></div>`}
+function loadImg(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{res(im);setTimeout(()=>URL.revokeObjectURL(u),0)};im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('image'))};im.src=u})}
+async function stampPhoto(file,label,g,t){
+  const im=await loadImg(file),k=Math.min(1,1600/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.max(1,Math.round(im.naturalWidth*k)),h=Math.max(1,Math.round(im.naturalHeight*k));
+  const cv=document.createElement('canvas');cv.width=w;cv.height=h;const c=cv.getContext('2d');c.drawImage(im,0,0,w,h);
+  const txt=[fmtDate(t),label,g?`${g.lat.toFixed(5)}, ${g.lon.toFixed(5)} (± ${g.acc} m)`:'sans GPS'].filter(Boolean).join('  ·  ');
+  let fs=Math.max(13,Math.round(w*0.021));c.font=`600 ${fs}px sans-serif`;
+  const tw=c.measureText(txt).width;if(tw>w-24){fs=Math.max(10,Math.floor(fs*(w-24)/tw));c.font=`600 ${fs}px sans-serif`}
+  const bh=Math.round(fs*1.9);c.fillStyle='rgba(0,0,0,.62)';c.fillRect(0,h-bh,w,bh);c.fillStyle='#fff';c.textBaseline='middle';c.fillText(txt,12,h-bh/2);
+  return new Promise((res,rej)=>cv.toBlob(b=>b?res(b):rej(new Error('jpeg')),'image/jpeg',0.82))}
+async function onFiles(inp){
+  const files=[...inp.files],h=cur(),x=ctx();inp.value='';if(!files.length||!h||!h.photos)return;
+  const fromCam=inp.id==='cam',label=(x.d&&x.d.nom)||'';let n=0;
+  for(const f of files){try{const t=Date.now(),g=fromCam&&fresh()?{lat:r6(fix.lat),lon:r6(fix.lon),acc:Math.round(fix.acc)}:null;
+      const blob=await stampPhoto(f,label,g,t),id=uid();await putPhoto(id,blob);
+      const p={id,t,lg:''};if(g){p.lat=g.lat;p.lon=g.lon;p.acc=g.acc}h.photos.push(p);n++}catch(e){toast("Cette photo n'a pas pu être enregistrée")}}
+  if(n){save();render();toast(fromCam&&!fresh()?'Photo enregistrée, sans position GPS':plur(n,'photo')+' enregistrée'+(n>1?'s':''))}}
+let vph=null;
+async function openViewer(id){const h=cur();vph=h&&h.photos&&h.photos.find(p=>p.id===id);if(!vph)return;sure=null;drawViewer()}
+async function drawViewer(){const p=vph,el=$('#viewer');el.hidden=false;
+  el.innerHTML=`<div class="viewer-in"><button type="button" class="btn" data-act="closeViewer">Fermer la photo</button><img id="vimg" alt="Photo du ${fmtDate(p.t)}">
+  <p class="meta">${fmtDate(p.t)}${p.lat!=null?` · ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)} · ± ${p.acc} m`:' · sans position GPS'}</p>
+  <div class="fld"><label for="ph-lg">Légende de la photo</label><input id="ph-lg" type="text" autocomplete="off" data-o="ph" data-k="lg" value="${esc(p.lg||'')}"></div>
+  <button type="button" class="btn danger${sure==='ph'?' sure':''}" data-act="delPhoto">${sure==='ph'?'Confirmer : supprimer la photo':'Supprimer la photo'}</button></div>`;
+  const u=await photoUrl(p.id);const im=$('#vimg');if(im&&u)im.src=u}
+function closeViewer(){$('#viewer').hidden=true;$('#viewer').innerHTML='';vph=null;sure=null;render()}
+
+/* ---------- contrôle : ce qui manque ---------- */
+const ouvName=o=>OUV[o.type]+(o.f.nom?' '+o.f.nom:'');
+function missOuv(o){const m=[];if(!o.f.etat)m.push('état');if(!o.gps)m.push('position GPS');if(!o.photos.length)m.push('photo');return m}
+function missDouar(d){const m=[];if(!d.f.situation)m.push('Situation du douar');if(d.f.menages===''||d.f.menages==null)m.push('Nombre de ménages');
+  if(!d.gps)m.push('Position GPS du douar');if(!d.photos.length)m.push('Photo du douar');
+  d.ouvrages.forEach(o=>{const mo=missOuv(o);if(mo.length)m.push(`${ouvName(o)} : ${mo.join(', ')}`)});return m}
+const countPh=d=>d.photos.length+d.ouvrages.reduce((s,o)=>s+o.photos.length,0)+d.traces.reduce((s,t)=>s+t.photos.length,0);
+function statsC(c){let ph=0,miss=0;c.douars.forEach(d=>{ph+=countPh(d);if(missDouar(d).length)miss++});return {n:c.douars.length,ph,miss}}
+function allPhotoIds(o){const ids=[];(function w(x){if(!x||typeof x!=='object')return;if(Array.isArray(x)){x.forEach(w);return}
+  if(Array.isArray(x.photos))x.photos.forEach(p=>ids.push(p.id));Object.keys(x).forEach(k=>{if(k!=='photos')w(x[k])})})(o);return ids}
+
+/* ---------- écrans ---------- */
+const addRow=(kind,ph,btn)=>`<div class="fld"><label for="new-${kind}">${ph}</label><input id="new-${kind}" type="text" autocomplete="off" enterkeyhint="done"><button type="button" class="btn primary" data-act="add" data-kind="${kind}">${btn}</button></div>`;
+const delBtn=(kind,label)=>`<section class="sec">${sure===kind?`<div class="btnrow"><button type="button" class="btn" data-act="cancelDel">Annuler</button><button type="button" class="btn danger sure" data-act="del" data-kind="${kind}">Confirmer</button></div>`:`<button type="button" class="btn danger" data-act="del" data-kind="${kind}">${label}</button>`}</section>`;
+function exportHtml(scope,label){
+  let h=`<section class="sec"><h2>Fin de journée</h2>`;
+  if(exp&&exp.scope===scope&&exp.busy)h+=`<p class="note">Préparation en cours…</p>`;
+  else if(exp&&exp.scope===scope&&exp.blob){
+    h+=`<p class="done">Fichier prêt : ${plur(exp.nd,'douar')}, ${plur(exp.np,'photo')}, ${(exp.blob.size/1048576).toFixed(1).replace('.',',')} Mo</p>`;
+    h+=`<button type="button" class="btn primary" data-act="dl">Enregistrer le fichier dans le téléphone</button>`;
+    if(exp.canShare)h+=`<button type="button" class="btn" data-act="share">Envoyer par WhatsApp ou e-mail</button>`;
+    h+=`<p class="hint">Envoie ce fichier au bureau chaque soir.</p>`;
+  }else h+=`<button type="button" class="btn primary" data-act="prep" data-scope="${scope}">${label}</button><p class="hint">Un seul fichier zip : photos, tableau Excel, carte Google Earth.</p>`;
+  return h+`</section>`}
+const VIEWS={
+ home(){const cs=data.communes;let h='';
+  if(window.claude)h+=`<p class="note">Aperçu dans Claude : le GPS et le mode sans réseau ne marchent pas ici. Ils marchent dans la version installée sur le téléphone.</p>`;
+  else if(window.DIAG_DEMO)h+=`<p class="note">Version d'essai pour relire les fiches. Dans ce fichier, le GPS peut ne pas marcher et les saisies peuvent ne pas être gardées.</p>`;
+  if(memOnly&&!window.DIAG_DEMO)h+=`<p class="miss">Stockage indisponible sur cet écran : les données ne seront pas gardées après fermeture.</p>`;
+  h+=`<section class="sec"><h2>Marché</h2>
+   <div class="fld"><label for="f-projet">Nom du marché ou du projet</label><input id="f-projet" type="text" autocomplete="off" data-o="cur" data-k="projet" value="${esc(data.projet)}"></div>
+   <div class="fld"><label for="f-technicien">Responsable du relevé</label><input id="f-technicien" type="text" autocomplete="off" data-o="cur" data-k="technicien" value="${esc(data.technicien)}"></div></section>`;
+  h+=`<section class="sec"><h2>Communes</h2>`;
+  if(cs.length)h+=`<div class="list">`+cs.map(c=>{const s=statsC(c);return `<button type="button" class="row" data-act="go" data-v="commune" data-c="${c.id}"><span class="main"><span class="t">${esc(c.nom||'Commune sans nom')}</span><span class="s">${plur(s.n,'douar')} · ${plur(s.ph,'photo')}</span></span>${s.miss?`<span class="pill" data-tone="warn">${s.miss} à compléter</span>`:''}</button>`}).join('')+`</div>`;
+  else h+=`<p class="empty">Aucune commune pour le moment. Écris son nom ci-dessous, puis touche « Ajouter la commune ».</p>`;
+  h+=addRow('commune','Nouvelle commune','Ajouter la commune')+`</section>`;
+  if(cs.length>1)h+=exportHtml('all','Préparer le fichier de toutes les communes');
+  if(!cs.length)h+=`<section class="sec"><button type="button" class="link" data-act="example">Charger un exemple pour essayer</button></section>`;
+  h+=`<section class="sec"><h2>État de l'appli</h2><p class="hint" id="state">${stateText()}</p></section>`;
+  return h},
+ commune({c}){const s=statsC(c);let h='';
+  h+=`<section class="sec"><div class="fld"><label for="f-nom">Nom de la commune</label><input id="f-nom" type="text" autocomplete="off" data-o="cur" data-k="nom" value="${esc(c.nom)}"></div>
+   <div class="fld"><label for="f-province">Province</label><input id="f-province" type="text" autocomplete="off" data-o="cur" data-k="province" value="${esc(c.province||'')}"></div></section>`;
+  h+=`<section class="sec"><h2>Douars<span class="count">${s.n}</span></h2>`;
+  if(s.n){const cnt={};c.douars.forEach(d=>{const k=d.f.situation||'_';cnt[k]=(cnt[k]||0)+1});
+   h+=`<div class="pills">`+Object.entries(SIT).filter(([k])=>cnt[k]).map(([k,[l,t]])=>`<span class="pill" data-tone="${t}">${cnt[k]} · ${l}</span>`).join('')+(cnt._?`<span class="pill">${cnt._} · à faire</span>`:'')+`</div>`;
+   h+=`<div class="list">`+c.douars.map(d=>{const m=missDouar(d).length,st=SIT[d.f.situation];
+    return `<button type="button" class="row" data-act="go" data-v="douar" data-d="${d.id}"><span class="main"><span class="t">${esc(d.nom||'Douar sans nom')}</span><span class="s">${plur(d.ouvrages.length,'ouvrage')} · ${plur(countPh(d),'photo')}</span></span><span class="side">${st?`<span class="pill" data-tone="${st[1]}">${st[0].split(',')[0].replace('Partiellement raccordé','Partiel')}</span>`:''}${m?`<span class="pill" data-tone="warn">${m} à compléter</span>`:`<span class="pill" data-tone="ok">Complet</span>`}</span></button>`}).join('')+`</div>`}
+  else h+=`<p class="empty">Aucun douar. Écris son nom, puis touche « Ajouter le douar ».</p>`;
+  h+=addRow('douar','Nouveau douar','Ajouter le douar')+`</section>`;
+  h+=`<section class="sec"><h2>Visites et intervenants</h2>`;
+  if(c.visites.length)h+=`<div class="list">`+c.visites.map(v=>`<button type="button" class="row" data-act="go" data-v="visite" data-vi="${v.id}"><span class="main"><span class="t">Visite du ${esc(frDay(v.date))}</span><span class="s">${plur(v.intervenants.filter(i=>i.nom).length,'intervenant')}</span></span></button>`).join('')+`</div>`;
+  h+=`<button type="button" class="btn" data-act="addVisite">Ajouter une visite</button></section>`;
+  h+=exportHtml('commune','Préparer le fichier de la commune');
+  if(c.lastExport)h+=`<p class="hint">Dernier fichier préparé : ${fmtDate(c.lastExport)}</p>`;
+  h+=delBtn('commune','Supprimer la commune');return h},
+ douar({d,n}){const m=missDouar(d),tab=n.tab||'fiche';let h='';
+  h+=`<div class="tabs" role="tablist">`+[['fiche','Fiche',''],['ouv','Ouvrages',d.ouvrages.length],['tr','Tracés',d.traces.length]].map(([k,l,c])=>`<button type="button" class="tab" role="tab" data-act="tab" data-tab="${k}" aria-selected="${tab===k}">${l}${c!==''?`<span class="count">${c}</span>`:''}</button>`).join('')+`</div>`;
+  if(tab==='fiche'){
+  h+=m.length?`<div class="miss">À compléter<ul>${m.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:`<p class="done">Fiche complète</p>`;
+  h+=`<section class="sec"><div class="fld"><label for="f-nom">Nom du douar</label><input id="f-nom" type="text" autocomplete="off" data-o="cur" data-k="nom" value="${esc(d.nom)}"></div>`;
+  h+=F.douar.slice(0,1).map(x=>fieldHtml(x,d.f)).join('')+`</section>`;
+  h+=`<section class="sec"><h2>Position et photos</h2>${gpsHtml(d,'Position GPS du douar')}${photosHtml(d,true)}</section>`;
+  h+=`<section class="sec"><h2>Eau dans le douar</h2>`+F.douar.slice(1).filter(x=>shown(x,d.f)).map(x=>fieldHtml(x,d.f)).join('')+`</section>`;
+  h+=`<section class="sec"><button type="button" class="btn" data-act="tab" data-tab="ouv">Passer aux ouvrages</button></section>`+delBtn('douar','Supprimer le douar');}
+  if(tab==='ouv'){
+  h+=`<section class="sec"><h2>Ouvrages existants<span class="count">${d.ouvrages.length}</span></h2>`;
+  if(d.ouvrages.length)h+=`<div class="list">`+d.ouvrages.map(o=>{const mo=missOuv(o),e=ETAT[o.f.etat];
+    return `<button type="button" class="row" data-act="go" data-v="ouvrage" data-o="${o.id}"><span class="main"><span class="t">${esc(ouvName(o))}</span><span class="s">${plur(o.photos.length,'photo')}${mo.length?' · manque : '+esc(mo.join(', ')):''}</span></span>${e?`<span class="pill" data-tone="${e[1]}">${e[0]}</span>`:''}</button>`}).join('')+`</div>`;
+  if(!d.ouvrages.length&&!picker)h+=`<p class="empty">Aucun ouvrage noté pour ce douar.</p>`;
+  if(picker)h+=`<div class="fld"><div class="lbl">Quel ouvrage ?</div><div class="opts">`+Object.entries(OUV).map(([k,l])=>`<button type="button" class="opt" data-act="addOuv" data-type="${k}">${l}</button>`).join('')+`</div><button type="button" class="link" data-act="picker">Annuler</button></div>`;
+  else h+=`<button type="button" class="btn primary" data-act="picker">Ajouter un ouvrage</button>`;
+  h+=`</section>`;}
+  if(tab==='tr'){
+  h+=`<section class="sec"><h2>Tracés de conduite<span class="count">${d.traces.length}</span></h2>`;
+  if(d.traces.length)h+=`<div class="list">`+d.traces.map(t=>`<button type="button" class="row" data-act="go" data-v="trace" data-t="${t.id}"><span class="main"><span class="t">${esc(t.nom||'Tracé sans nom')}</span><span class="s">${TRACE[t.type]||'Type à choisir'} · ${Math.round(traceLen(t))} m · ${plur(t.pts.length,'point')}</span></span></button>`).join('')+`</div>`;
+  if(!d.traces.length)h+=`<p class="empty">Aucun tracé relevé pour ce douar.</p>`;
+  h+=`<button type="button" class="btn primary" data-act="addTrace">Ajouter un tracé</button></section>`;}
+  return h},
+ ouvrage({o}){const mo=missOuv(o);let h='';
+  h+=mo.length?`<p class="miss">Il manque : ${esc(mo.join(', '))}</p>`:`<p class="done">Fiche complète</p>`;
+  h+=`<section class="sec"><h2>Position et photos</h2>${gpsHtml(o,"Position GPS de l'ouvrage")}${photosHtml(o,true)}</section>`;
+  h+=`<section class="sec"><h2>${esc(OUV[o.type])}</h2>`+F.ouvrage.filter(x=>shown(x,o.f,o.type)).map(x=>fieldHtml(x,o.f)).join('')+`</section>`;
+  h+=delBtn('ouvrage',"Supprimer l'ouvrage");return h},
+ trace({t}){const on=rec&&rec.t===t.id;let h='';
+  h+=`<section class="sec"><div class="fld"><label for="f-nom">Nom du tracé</label><input id="f-nom" type="text" autocomplete="off" data-o="cur" data-k="nom" value="${esc(t.nom)}"></div>
+   <fieldset class="fld"><legend>Type</legend><div class="opts one">`+Object.entries(TRACE).map(([k,l])=>`<button type="button" class="opt" data-act="setRoot" data-k="type" data-v="${k}" aria-pressed="${t.type===k}">${l}</button>`).join('')+`</div></fieldset></section>`;
+  h+=`<section class="sec"><h2>Relevé en marchant</h2><div class="stats" id="tr-stats">${traceStats(t)}</div>
+   <button type="button" class="btn ${on?'rec':'primary'}" data-act="rec">${on?"Arrêter l'enregistrement":(t.pts.length?"Reprendre l'enregistrement":"Démarrer l'enregistrement")}</button>
+   <p class="hint">Marche le long de la conduite, téléphone en main, écran allumé. Un point est pris tous les 8 mètres environ.</p>
+   <button type="button" class="btn" data-act="addPt" data-kind="Point">Ajouter un point ici</button></section>`;
+  h+=`<section class="sec"><h2>Point particulier ici</h2><div class="opts">`+SING.map(s=>`<button type="button" class="opt" data-act="addPt" data-kind="${esc(s)}">${esc(s)}</button>`).join('')+`</div></section>`;
+  const named=t.pts.map((p,i)=>[p,i]).filter(([p])=>p.kind);
+  if(named.length)h+=`<section class="sec"><h2>Points notés<span class="count">${named.length}</span></h2><div class="list">`+named.map(([p,i])=>`<div class="ptrow"><div class="pthead"><span class="main"><b>${esc(p.kind)}</b><span class="s">${p.lat.toFixed(6)}, ${p.lon.toFixed(6)} · ± ${p.acc} m</span></span><button type="button" class="mini" data-act="delPt" data-i="${i}">Retirer</button></div><input type="text" id="pt-${i}" autocomplete="off" aria-label="Remarque sur ce point" placeholder="Remarque" data-o="pt" data-i="${i}" data-k="note" value="${esc(p.note||'')}"></div>`).join('')+`</div></section>`;
+  h+=`<section class="sec"><h2>Photos et remarque</h2>${photosHtml(t,false)}<div class="fld"><label for="f-note">Remarque</label><textarea id="f-note" rows="2" data-o="cur" data-k="note">${esc(t.note||'')}</textarea></div></section>`;
+  h+=delBtn('trace','Supprimer le tracé');return h},
+ visite({vi}){let h='';
+  h+=`<section class="sec"><div class="fld"><label for="f-date">Date de la visite</label><input id="f-date" type="date" data-o="cur" data-k="date" value="${esc(vi.date||'')}"></div></section>`;
+  h+=`<section class="sec"><h2>Intervenants présents</h2>`+vi.intervenants.map((iv,i)=>`<div class="iv">
+    <input type="text" id="iv-nom-${i}" autocomplete="off" aria-label="Nom" placeholder="Nom et prénom" data-o="iv" data-i="${i}" data-k="nom" value="${esc(iv.nom||'')}">
+    <select id="iv-q-${i}" aria-label="Qualité" data-o="iv" data-i="${i}" data-k="qualite"><option value="">Qualité…</option>${QUAL.map(q=>`<option${iv.qualite===q?' selected':''}>${esc(q)}</option>`).join('')}</select>
+    <input type="tel" id="iv-tel-${i}" autocomplete="off" aria-label="Téléphone" placeholder="Téléphone" data-o="iv" data-i="${i}" data-k="tel" value="${esc(iv.tel||'')}">
+    <button type="button" class="mini" data-act="delIv" data-i="${i}">Retirer cette personne</button></div>`).join('');
+  h+=`<button type="button" class="btn" data-act="addIv">Ajouter une personne</button></section>`;
+  h+=`<section class="sec"><div class="fld"><label for="f-obs">Ce qui a été dit ou décidé</label><textarea id="f-obs" rows="4" data-o="cur" data-k="obs">${esc(vi.obs||'')}</textarea></div></section>`;
+  h+=delBtn('visite','Supprimer la visite');return h}
+};
+function traceStats(t){return `<div class="stat"><b>${Math.round(traceLen(t))} m</b><span>Longueur relevée</span></div><div class="stat"><b>${t.pts.length}</b><span>Points pris</span></div>`}
+let swReady=false;
+function stateText(){const nph=allPhotoIds(data).length;const parts=[plur(nph,'photo')+' dans le téléphone'];
+  if(!window.claude&&!window.DIAG_DEMO)parts.push(swReady?"Marche sans réseau : oui":"Marche sans réseau : pas encore, ouvre l'appli une fois avec du réseau");
+  return parts.join(' · ')}
+function titleFor(){const x=ctx();switch(x.n.v){case 'commune':return x.c.nom||'Commune';case 'douar':return x.d.nom||'Douar';
+  case 'ouvrage':return ouvName(x.o);case 'trace':return x.t.nom||'Tracé';case 'visite':return 'Visite du '+frDay(x.vi.date);default:return 'Diagnostic AEP'}}
+function stripHtml(){const x=ctx(),n=x.n,ok=m=>m.length?'':'✓ ';
+  const sc=(label,on,attrs,cls)=>`<button type="button" class="sc${cls||''}" ${attrs}${on?' aria-current="true"':''}>${esc(label)}</button>`;
+  const sib=(label,on,v,key,id)=>sc(label,on,`data-act="sib" data-v="${v}" data-${key}="${id}"`);
+  if(n.v==='commune'&&data.communes.length>1)return data.communes.map(c=>sib(c.nom||'Commune',c===x.c,'commune','c',c.id)).join('');
+  if(n.v==='douar'&&x.c.douars.length>1)return x.c.douars.map(d=>sib(ok(missDouar(d))+(d.nom||'Douar'),d===x.d,'douar','d',d.id)).join('');
+  if(n.v==='visite'&&x.c.visites.length>1)return x.c.visites.map(v=>sib('Visite du '+frDay(v.date),v===x.vi,'visite','vi',v.id)).join('');
+  if(n.v==='ouvrage'||n.v==='trace')return sc('Fiche du douar',false,'data-act="toDouar"',' side')+
+    x.d.ouvrages.map(o=>sib(ok(missOuv(o))+ouvName(o),o===x.o,'ouvrage','o',o.id)).join('')+
+    x.d.traces.map(t=>sib(t.nom||'Tracé',t===x.t,'trace','t',t.id)).join('')+sc('+ Ouvrage',false,'data-act="plusOuv"',' side');
+  return ''}
+function renderStrip(){const el=$('#strip'),h=stripHtml(),left=el.scrollLeft;el.hidden=!h;el.innerHTML=h;if(!h)return;
+  const a=el.querySelector('[aria-current]');el.scrollLeft=left;
+  if(a&&(a.offsetLeft<el.scrollLeft+16||a.offsetLeft+a.offsetWidth>el.scrollLeft+el.clientWidth-16))el.scrollLeft=a.offsetLeft-(el.clientWidth-a.offsetWidth)/2}
+function render(){while(nav.length>1&&!cur())nav.pop();
+  $('#app').innerHTML=VIEWS[top().v](ctx());$('#title').textContent=titleFor();$('#back').hidden=nav.length<2;renderStrip();renderRec();hydrate($('#app'));chip()}
+
+/* ---------- actions ---------- */
+function tgt(el){const o=el.dataset.o,c=cur();if(!c)return null;if(o==='cur')return c;if(o==='f')return c.f;
+  if(o==='iv')return c.intervenants&&c.intervenants[+el.dataset.i];if(o==='pt')return c.pts&&c.pts[+el.dataset.i];if(o==='ph')return vph;return null}
+function onInput(e){const el=e.target;if(!el.dataset||!el.dataset.k||!el.dataset.o)return;const tg=tgt(el);if(!tg)return;
+  let v=el.value;if(el.type==='number'){v=v===''?'':Number(v);if(Number.isNaN(v))v=''}tg[el.dataset.k]=v;save();
+  if((el.dataset.o==='cur'||el.dataset.o==='f')&&(el.dataset.k==='nom'||el.dataset.k==='date')){$('#title').textContent=titleFor();renderStrip()}}
+document.addEventListener('input',onInput);
+document.addEventListener('change',e=>{if(e.target.matches('input[type=file]'))onFiles(e.target);else onInput(e)});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id&&e.target.id.startsWith('new-')){e.preventDefault();ACT.add({dataset:{kind:e.target.id.slice(4)}})}});
+const ACT={
+ back,
+ sib(b){if(b.getAttribute('aria-current'))return;const n=top(),v=b.dataset.v;
+  swap({v,c:b.dataset.c||n.c,d:b.dataset.d||n.d,o:b.dataset.o,t:b.dataset.t,vi:b.dataset.vi,tab:v==='douar'?n.tab:undefined})},
+ tab(b){top().tab=b.dataset.tab;picker=false;sure=null;keepNav();render();window.scrollTo(0,0)},
+ toDouar(){const p=nav[nav.length-2];if(p)p.tab='fiche';back()},
+ plusOuv(){const p=nav[nav.length-2];if(p)p.tab='ouv';afterPop=()=>{picker=true};back()},
+ go(b){const n=top();go({v:b.dataset.v,c:b.dataset.c||n.c,d:b.dataset.d||n.d,o:b.dataset.o,t:b.dataset.t,vi:b.dataset.vi})},
+ add(b){const kind=b.dataset.kind,inp=$('#new-'+kind),nom=(inp&&inp.value||'').trim();if(!nom){toast("Écris le nom d'abord");inp&&inp.focus();return}
+  if(kind==='commune'){const c={id:uid(),nom,province:'',douars:[],visites:[]};data.communes.push(c);save();go({v:'commune',c:c.id})}
+  else{const c=ctx().c,d={id:uid(),nom,f:{},gps:null,photos:[],ouvrages:[],traces:[],t:Date.now()};c.douars.push(d);save();go({v:'douar',c:c.id,d:d.id})}},
+ picker(){picker=!picker;render()},
+ addOuv(b){const x=ctx(),o={id:uid(),type:b.dataset.type,f:{},gps:null,photos:[],t:Date.now()};x.d.ouvrages.push(o);save();go({v:'ouvrage',c:x.c.id,d:x.d.id,o:o.id})},
+ addTrace(){const x=ctx(),t={id:uid(),nom:'Tracé '+(x.d.traces.length+1),type:'',pts:[],photos:[],note:'',t:Date.now()};x.d.traces.push(t);save();go({v:'trace',c:x.c.id,d:x.d.id,t:t.id})},
+ addVisite(){const x=ctx(),v={id:uid(),date:isoDay(Date.now()),intervenants:[{nom:'',qualite:'',tel:''}],obs:''};x.c.visites.push(v);save();go({v:'visite',c:x.c.id,vi:v.id})},
+ addIv(){cur().intervenants.push({nom:'',qualite:'',tel:''});save();render()},
+ delIv(b){cur().intervenants.splice(+b.dataset.i,1);save();render()},
+ set(b){const f=cur().f,k=b.dataset.k;f[k]=f[k]===b.dataset.v?'':b.dataset.v;save();render()},
+ setRoot(b){const c=cur(),k=b.dataset.k;c[k]=c[k]===b.dataset.v?'':b.dataset.v;save();render()},
+ tog(b){const f=cur().f,k=b.dataset.k,a=Array.isArray(f[k])?f[k]:[],i=a.indexOf(b.dataset.v);if(i<0)a.push(b.dataset.v);else a.splice(i,1);f[k]=a;save();render()},
+ gps(){const g=takeFix();if(!g)return;cur().gps=g;save();render();toast('Position enregistrée, ± '+g.acc+' m')},
+ photo(b){openViewer(b.dataset.id)},
+ closeViewer,
+ async delPhoto(){if(sure!=='ph'){sure='ph';drawViewer();return}const h=cur(),id=vph.id;h.photos=h.photos.filter(p=>p.id!==id);await delPhotos([id]);save();closeViewer();toast('Photo supprimée')},
+ cancelDel(){sure=null;render()},
+ async del(b){const kind=b.dataset.kind;if(sure!==kind){sure=kind;render();return}const x=ctx();let gone;
+  if(kind==='commune'){gone=x.c;data.communes=data.communes.filter(c=>c!==x.c)}
+  else if(kind==='douar'){gone=x.d;x.c.douars=x.c.douars.filter(d=>d!==x.d)}
+  else if(kind==='ouvrage'){gone=x.o;x.d.ouvrages=x.d.ouvrages.filter(o=>o!==x.o)}
+  else if(kind==='trace'){gone=x.t;if(rec&&rec.t===x.t.id)stopRec();x.d.traces=x.d.traces.filter(t=>t!==x.t)}
+  else if(kind==='visite'){gone=x.vi;x.c.visites=x.c.visites.filter(v=>v!==x.vi)}
+  await delPhotos(allPhotoIds(gone));save();sure=null;back();toast('Supprimé')},
+ rec(){const n=top();if(rec){stopRec();render();toast('Enregistrement arrêté');return}
+  if(n.v!=='trace')return;if(gpsErr==='denied'||gpsErr==='none'){toast('GPS indisponible sur cet écran');return}
+  rec={c:n.c,d:n.d,t:n.t};wakeOn();render();toast("Enregistrement démarré. Garde l'écran allumé.");if(fresh())onFix()},
+ addPt(b){const g=takeFix();if(!g)return;const t=cur();t.pts.push({lat:g.lat,lon:g.lon,acc:g.acc,t:g.t,kind:b.dataset.kind,note:''});save();render();toast('Point ajouté : '+b.dataset.kind)},
+ delPt(b){cur().pts.splice(+b.dataset.i,1);save();render()},
+ example(){data.communes.push(exampleCommune());save();render();toast('Exemple chargé')},
+ async prep(b){const scope=b.dataset.scope,cs=scope==='all'?data.communes:[ctx().c];exp={scope,busy:true};render();
+  try{const r=await buildExport(cs);const name=`AEP_${scope==='all'?'Toutes_communes':(san(cs[0].nom)||'Commune')}_${isoDay(Date.now())}.zip`;
+   let canShare=false;try{canShare=!dlCap&&!!navigator.canShare&&navigator.canShare({files:[new File([r.blob],name,{type:'application/zip'})]})}catch(e){}
+   cs.forEach(c=>{c.lastExport=Date.now()});save();exp={scope,blob:r.blob,name,nd:r.nd,np:r.np,canShare};render()}
+  catch(e){exp=null;render();toast("Le fichier n'a pas pu être préparé")}},
+ async dl(){if(!exp||!exp.blob)return;
+  if(dlCap){try{await dlCap.save({filename:exp.name,data:exp.blob});toast('Fichier enregistré')}catch(e){toast(e&&e.code==='declined'?'Enregistrement annulé':"L'enregistrement n'est pas possible sur cet écran")}return}
+  const u=URL.createObjectURL(exp.blob),a=document.createElement('a');a.href=u;a.download=exp.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);toast('Fichier enregistré dans Téléchargements')},
+ async share(){if(!exp||!exp.blob)return;try{await navigator.share({files:[new File([exp.blob],exp.name,{type:'application/zip'})],title:exp.name})}catch(e){if(!e||e.name!=='AbortError')toast("L'envoi n'a pas marché. Enregistre le fichier, puis envoie-le.")}}
+};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const fn=ACT[b.dataset.act];if(fn)fn(b)});
+
+/* ---------- exemple ---------- */
+function exampleCommune(){const t=Date.now(),g=(lat,lon,acc)=>({lat,lon,acc,t});
+  return {id:uid(),nom:'EXEMPLE (à supprimer)',province:'',visites:[{id:uid(),date:isoDay(t),intervenants:[{nom:'Nom de l\'intervenant',qualite:'Association',tel:''}],obs:'Exemple de compte rendu de visite.'}],
+   douars:[
+    {id:uid(),nom:'Douar exemple 1',t,gps:g(30.412345,-8.912345,6),photos:[],traces:[],f:{situation:'raccorde',menages:42,ressource:["Réseau d'une association",'Forage'],gestion:'Association',desserte:['Branchements individuels'],electricite:'oui',equipements:['École','Mosquée']},
+     ouvrages:[{id:uid(),type:'forage',t,gps:g(30.413012,-8.911004,5),photos:[],f:{nom:'F1',etat:'moyen',service:'oui',profondeur:120,pompe:'oui',energie:'Solaire',problemes:['Pas de clôture ou de couvercle']}},
+               {id:uid(),type:'reservoir',t,gps:null,photos:[],f:{etat:'degrade',capacite:25,res_type:'Surélevé',problemes:['Fissures','Fuite']}}]},
+    {id:uid(),nom:'Douar exemple 2',t,gps:g(30.421118,-8.903377,8),photos:[],ouvrages:[],f:{situation:'partiel',menages:65,menages_nd:20,quartiers_nd:'Quartier haut',problemes:['Pression faible'],ressource:['Réseau ONEE'],distance:400},
+     traces:[{id:uid(),nom:'Tracé 1',type:'projetee',note:'',photos:[],t,pts:[{lat:30.421118,lon:-8.903377,acc:6,t,kind:''},{lat:30.421502,lon:-8.902911,acc:6,t,kind:'Traversée de chaâba / oued',note:'Largeur 6 m environ'},{lat:30.422004,lon:-8.902203,acc:7,t,kind:''}]}]},
+    {id:uid(),nom:'Douar exemple 3',t,gps:null,photos:[],ouvrages:[],traces:[],f:{situation:'non',menages:18,ressource:['Puits','Camion-citerne'],distance:1500}},
+    {id:uid(),nom:'Douar exemple 4',t,gps:null,photos:[],ouvrages:[],traces:[],f:{}}
+   ]}}
+
+/* ---------- export : zip, Excel, Google Earth ---------- */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zipB(){const parts=[],cen=[],te=new TextEncoder(),d=new Date();let off=0,n=0;
+  const dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(),tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+  return {add(name,u8,blob){const nb=te.encode(name),crc=crc32(u8),sz=u8.length;
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);h.setUint32(14,crc,true);h.setUint32(18,sz,true);h.setUint32(22,sz,true);h.setUint16(26,nb.length,true);
+    parts.push(h.buffer,nb,blob||u8);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(12,tm,true);c.setUint16(14,dt,true);c.setUint32(16,crc,true);c.setUint32(20,sz,true);c.setUint32(24,sz,true);c.setUint16(28,nb.length,true);c.setUint32(42,off,true);
+    cen.push(c.buffer,nb);off+=30+nb.length+sz;n++},
+   end(type){let cs=0;cen.forEach(p=>{cs+=p.byteLength});const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,n,true);e.setUint16(10,n,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+    return new Blob([...parts,...cen,e.buffer],{type})}}}
+const xesc=s=>String(s??'').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function colL(i){let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=(i-m-1)/26}return s}
+async function xlsxBytes(sheets){const z=zipB(),te=new TextEncoder(),X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',put=(n,s)=>z.add(n,te.encode(s));
+  const cell=(v,r,c,s)=>{const ref=colL(c)+r;if(typeof v==='number'&&isFinite(v))return `<c r="${ref}" s="${s}"><v>${v}</v></c>`;const t=xesc(v);
+    return t===''?`<c r="${ref}" s="${s}"/>`:`<c r="${ref}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${t}</t></is></c>`};
+  put('[Content_Types].xml',X+`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`);
+  put('_rels/.rels',X+`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  put('xl/workbook.xml',X+`<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${xesc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`);
+  put('xl/_rels/workbook.xml.rels',X+`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  const bd=`<border><left style="thin"><color rgb="FFB8C6CB"/></left><right style="thin"><color rgb="FFB8C6CB"/></right><top style="thin"><color rgb="FFB8C6CB"/></top><bottom style="thin"><color rgb="FFB8C6CB"/></bottom><diagonal/></border>`;
+  put('xl/styles.xml',X+`<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0A5A73"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${bd}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`);
+  sheets.forEach((sh,i)=>{const w=sh.head.map((h,c)=>{let m=String(h).length;sh.rows.forEach(r=>{const l=String(r[c]??'').length;if(l>m)m=l});return Math.min(55,Math.max(14,m+4))});
+    let x=X+`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"${i===0?' tabSelected="1"':''}><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>${w.map((v,c)=>`<col min="${c+1}" max="${c+1}" width="${v}" customWidth="1"/>`).join('')}</cols><sheetData>`;
+    x+=`<row r="1" ht="36" customHeight="1">${sh.head.map((h,c)=>cell(h,1,c,1)).join('')}</row>`;
+    sh.rows.forEach((r,ri)=>{x+=`<row r="${ri+2}">${sh.head.map((_,c)=>cell(r[c],ri+2,c,typeof r[c]==='number'?3:2)).join('')}</row>`});
+    put(`xl/worksheets/sheet${i+1}.xml`,x+`</sheetData><pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape"/></worksheet>`)});
+  return new Uint8Array(await z.end('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').arrayBuffer())}
+async function buildExport(communes){
+  const te=new TextEncoder(),files=new Map(),photoRows=[],nowS=fmtDate(Date.now());
+  const S={douars:[],ouv:[],traces:[],pts:[],vis:[]};let kml='',nd=0;
+  const dCols=F.douar,oCols=F.ouvrage,head=d=>d.label+(d.unit?` (${d.unit})`:'');
+  const tbl=rows=>`<table border="0" cellpadding="3">`+rows.filter(r=>r[1]!==''&&r[1]!=null).map(r=>`<tr><td><b>${xesc(r[0])}</b></td><td>${xesc(r[1])}</td></tr>`).join('')+`</table>`;
+  const imgs=ph=>ph.map(p=>`<p><img src="${xesc(files.get(p.id))}" width="420"/>${p.lg?`<br/>${xesc(p.lg)}`:''}</p>`).join('');
+  const pm=(name,style,g,desc)=>g?`<Placemark><name>${xesc(name)}</name><styleUrl>#${style}</styleUrl><description><![CDATA[${desc.replace(/]]>/g,']]&gt;')}]]></description><Point><coordinates>${g.lon},${g.lat},0</coordinates></Point></Placemark>`:'';
+  for(const c of communes){const cn=san(c.nom)||'Commune',seen=new Set();let kc='';
+    c.visites.forEach(v=>{const ivs=v.intervenants.filter(i=>i.nom||i.qualite||i.tel);(ivs.length?ivs:[{}]).forEach(iv=>S.vis.push([c.nom,frDay(v.date),iv.nom||'',iv.qualite||'',iv.tel||'',v.obs||'']))});
+    for(const d of c.douars){nd++;let dn=san(d.nom)||'Douar',k=2;const base=dn;while(seen.has(dn))dn=base+'_'+(k++);seen.add(dn);
+      let n=0;const name=(holder,tag,what)=>holder.photos.forEach(p=>{n++;const f=`photos/${cn}/${dn}/${dn}_${tag}_${String(n).padStart(3,'0')}.jpg`;files.set(p.id,f);
+        photoRows.push([f,c.nom,d.nom,what,fmtDate(p.t),p.lat??'',p.lon??'',p.acc??'',p.lg||''])});
+      name(d,'douar','Douar');d.ouvrages.forEach((o,i)=>name(o,(san(OUV[o.type])||'Ouvrage')+(i+1),ouvName(o)));d.traces.forEach((t,i)=>name(t,'Trace'+(i+1),t.nom||'Tracé'));
+      const g=d.gps||{},dv=dCols.map(x=>valText(x,d.f[x.k]));
+      S.douars.push([c.nom,d.nom,...dv,g.lat??'',g.lon??'',g.acc??'',d.ouvrages.length,countPh(d),missDouar(d).join(' | '),fmtDate(d.t||Date.now())]);
+      const st=SIT[d.f.situation];let kd=pm(d.nom||'Douar','sit-'+(d.f.situation||'none'),d.gps,tbl(dCols.map((x,i)=>[x.label,dv[i]]))+imgs(d.photos));
+      d.photos.filter(p=>p.lat!=null&&(!d.gps||dist(p,d.gps)>15)).forEach(p=>{kd+=pm('Photo','photo',p,imgs([p]))});
+      d.ouvrages.forEach(o=>{const og=o.gps||{},ov=oCols.map(x=>x.types&&!x.types.includes(o.type)?'':valText(x,o.f[x.k]));
+        S.ouv.push([c.nom,d.nom,OUV[o.type],...ov,og.lat??'',og.lon??'',og.acc??'',o.photos.map(p=>files.get(p.id).split('/').pop()).join(' ; '),fmtDate(o.t||Date.now())]);
+        kd+=pm(ouvName(o),'ouv',o.gps,tbl([['Type',OUV[o.type]],...oCols.map((x,i)=>[x.label,ov[i]])])+imgs(o.photos))});
+      d.traces.forEach(t=>{const L=Math.round(traceLen(t));S.traces.push([c.nom,d.nom,t.nom||'',TRACE[t.type]||'',L,t.pts.length,t.note||'']);
+        t.pts.forEach((p,i)=>S.pts.push([c.nom,d.nom,t.nom||'',i+1,p.kind||'',p.lat,p.lon,p.acc??'',p.note||'']));
+        if(t.pts.length>1)kd+=`<Placemark><name>${xesc(t.nom||'Tracé')}</name><styleUrl>#tr-${t.type||'none'}</styleUrl><description><![CDATA[${tbl([['Type',TRACE[t.type]||''],['Longueur relevée (m)',L],['Remarque',t.note||'']])}]]></description><LineString><tessellate>1</tessellate><coordinates>${t.pts.map(p=>`${p.lon},${p.lat},0`).join(' ')}</coordinates></LineString></Placemark>`;
+        t.pts.filter(p=>p.kind&&p.kind!=='Point').forEach(p=>{kd+=pm(p.kind,'sing',p,tbl([['Tracé',t.nom||''],['Remarque',p.note||'']]))});
+        t.photos.filter(p=>p.lat!=null).forEach(p=>{kd+=pm('Photo','photo',p,imgs([p]))})});
+      kc+=`<Folder><name>${xesc(d.nom||'Douar')}${st?' ('+xesc(st[0])+')':''}</name>${kd}</Folder>`}
+    kml+=`<Folder><name>${xesc(c.nom||'Commune')}</name><open>1</open>${kc}</Folder>`}
+  const icon=(id,href,sc)=>`<Style id="${id}"><IconStyle><scale>${sc||1.1}</scale><Icon><href>http://maps.google.com/mapfiles/kml/${href}</href></Icon></IconStyle></Style>`;
+  const line=(id,col)=>`<Style id="${id}"><LineStyle><color>${col}</color><width>4</width></LineStyle></Style>`;
+  kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${xesc('Diagnostic AEP'+(data.projet?' - '+data.projet:''))}</name>`+
+    icon('sit-raccorde','paddle/grn-circle.png')+icon('sit-partiel','paddle/ylw-circle.png')+icon('sit-non','paddle/red-circle.png')+icon('sit-debit','paddle/purple-circle.png')+icon('sit-none','paddle/wht-circle.png')+
+    icon('ouv','paddle/blu-square.png')+icon('sing','shapes/placemark_circle.png',0.9)+icon('photo','shapes/camera.png',0.9)+
+    line('tr-existante','ffff7800')+line('tr-projetee','ff0000ff')+line('tr-piste','ff00a5ff')+line('tr-none','ff808080')+kml+`</Document></kml>`;
+  const sheets=[
+   {name:'Douars',head:['Commune','Douar',...dCols.map(head),'Latitude','Longitude','Précision GPS (m)','Ouvrages','Photos','À compléter','Créé le'],rows:S.douars},
+   {name:'Ouvrages',head:['Commune','Douar','Type',...oCols.map(head),'Latitude','Longitude','Précision GPS (m)','Photos','Créé le'],rows:S.ouv},
+   {name:'Tracés',head:['Commune','Douar','Tracé','Type','Longueur relevée (m)','Points','Remarque'],rows:S.traces},
+   {name:'Points des tracés',head:['Commune','Douar','Tracé','N°','Nature du point','Latitude','Longitude','Précision GPS (m)','Remarque'],rows:S.pts},
+   {name:'Photos',head:['Fichier','Commune','Douar','Rattachée à','Date','Latitude','Longitude','Précision GPS (m)','Légende'],rows:photoRows},
+   {name:'Visites',head:['Commune','Date','Intervenant','Qualité','Téléphone','Compte rendu'],rows:S.vis}];
+  const copy=JSON.parse(JSON.stringify({projet:data.projet,responsable:data.technicien,exporte_le:nowS,communes}));
+  (function w(x){if(!x||typeof x!=='object')return;if(Array.isArray(x)){x.forEach(w);return}if(Array.isArray(x.photos))x.photos.forEach(p=>{p.fichier=files.get(p.id)||''});Object.values(x).forEach(w)})(copy);
+  const z=zipB();
+  z.add('LISEZ-MOI.txt',te.encode(['Diagnostic AEP - fichier du '+nowS,data.projet?'Marché : '+data.projet:'',data.technicien?'Responsable du relevé : '+data.technicien:'','',
+    '- diagnostic.xlsx : tableaux (douars, ouvrages, tracés, photos, visites)','- doc.kml : à ouvrir avec Google Earth après avoir décompressé le dossier','- photos : classées par commune puis par douar','- donnees.json : toutes les données, pour le traitement au bureau','',
+    'Coordonnées en degrés décimaux WGS84. Précision GPS du téléphone : voir la colonne de chaque point.'].join('\r\n')));
+  z.add('diagnostic.xlsx',await xlsxBytes(sheets));z.add('doc.kml',te.encode(kml));z.add('donnees.json',te.encode(JSON.stringify(copy,null,1)));
+  let np=0;for(const [id,f] of files){const b=await getPhoto(id);if(!b)continue;z.add(f,new Uint8Array(await b.arrayBuffer()),b);np++}
+  return {blob:z.end('application/zip'),nd,np}}
+
+/* ---------- démarrage ---------- */
+let dlCap=null;
+(async()=>{try{dlCap=(window.claude&&window.claude.use&&await window.claude.use('downloads'))||null}catch(e){dlCap=null}})();
+(async function init(){
+  try{const d=await Promise.race([idbOp('kv','readonly',s=>s.get('data')),new Promise((_,rej)=>setTimeout(()=>rej(new Error('lent')),2500))]);data=normalize(d)}catch(e){memOnly=true;data=normalize(null)}
+  if((window.claude||window.DIAG_DEMO)&&!data.communes.length&&!data.exShown){data.exShown=true;data.communes.push(exampleCommune());save()}
+  if(Array.isArray(data.nav)&&data.nav.length>1&&data.nav.every((n,i)=>n&&VIEWS[n.v]&&(i>0||n.v==='home'))){
+    nav=data.nav;while(nav.length>1&&!cur())nav.pop();
+    for(let i=1;i<nav.length;i++){try{history.pushState({i},'');hist++}catch(e){}}}
+  data.nav=nav;
+  render();startGps();
+  const local=location.hostname==='localhost'||location.hostname==='127.0.0.1';
+  if(!window.claude&&'serviceWorker' in navigator&&(location.protocol==='https:'||local)){
+    try{await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;swReady=true;const s=$('#state');if(s)s.textContent=stateText()}catch(e){}}
+})();
+})();
+</script>
+
+</body></html>
